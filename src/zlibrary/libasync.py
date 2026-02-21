@@ -1,8 +1,7 @@
 import asyncio
 
-from typing import List, Union
+from typing import Dict, List, Optional, Union
 from urllib.parse import quote
-from aiohttp.abc import AbstractCookieJar
 
 from .logger import logger
 from .exception import (
@@ -17,7 +16,6 @@ from .util import GET_request, POST_request, GET_request_cookies
 from .abs import SearchPaginator, BookItem
 from .profile import ZlibProfile
 from .const import Extension, Language
-from typing import Optional
 import json
 
 
@@ -37,9 +35,8 @@ class AsyncZlib:
     onion = False
 
     __semaphore = asyncio.Semaphore(64)
-    _jar: Optional[AbstractCookieJar] = None
 
-    cookies = None
+    cookies: Optional[Dict[str, str]] = None
     proxy_list = None
 
     _mirror = ""
@@ -112,7 +109,7 @@ class AsyncZlib:
             "gg_json_mode": 1,
         }
 
-        resp, jar = await POST_request(
+        resp, cookies = await POST_request(
             self.login_domain, data, proxy_list=self.proxy_list
         )
         resp = json.loads(resp)
@@ -120,11 +117,8 @@ class AsyncZlib:
         logger.debug(f"Login response: {resp}")
         if resp.get('validationError'):
             raise LoginFailed(json.dumps(resp, indent=4))
-        self._jar = jar
 
-        self.cookies = {}
-        for cookie in self._jar:
-            self.cookies[cookie.key] = cookie.value
+        self.cookies = cookies
         logger.debug("Set cookies: %s", self.cookies)
 
         if self.onion and self.domain:
@@ -132,13 +126,11 @@ class AsyncZlib:
                 self.cookies["remix_userkey"],
                 self.cookies["remix_userid"],
             )
-            resp, jar = await GET_request_cookies(
+            resp, new_cookies = await GET_request_cookies(
                 url, proxy_list=self.proxy_list, cookies=self.cookies
             )
 
-            self._jar = jar
-            for cookie in self._jar:
-                self.cookies[cookie.key] = cookie.value
+            self.cookies.update(new_cookies)
             logger.debug("Set cookies: %s", self.cookies)
 
             self.mirror = self.domain
@@ -153,7 +145,6 @@ class AsyncZlib:
         return self.profile
 
     async def logout(self):
-        self._jar = None
         self.cookies = None
 
     async def search(

@@ -12,14 +12,8 @@ classifiers = [
     "Programming Language :: Python",
 ]
 dependencies = [
-  "aiodns",
-  "aiohttp",
-  "aiohttp_socks",
-  "Brotli",
-  "cffi",
+  "curl_cffi>=0.7",
   "ujson",
-  "yarl",
-  "multidict",
   "lxml",
   "beautifulsoup4",
   "bs4",

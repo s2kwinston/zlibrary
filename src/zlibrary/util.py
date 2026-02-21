@@ -1,84 +1,66 @@
-import aiohttp
 import asyncio
 
-from aiohttp_socks import ChainProxyConnector
+from curl_cffi.requests import AsyncSession
 
 from .exception import LoopError
 from .logger import logger
-from aiohttp.abc import AbstractCookieJar
-from typing import Tuple
+from typing import Dict, Optional, Tuple
 
 
-HEAD = {
-    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36"
-}
+# Impersonate Chrome 120 — replicates its TLS fingerprint to bypass bot detection
+IMPERSONATE = "chrome120"
 
-
-TIMEOUT = aiohttp.ClientTimeout(total=180, connect=0, sock_connect=120, sock_read=180)
-
-HEAD_TIMEOUT = aiohttp.ClientTimeout(total=4, connect=0, sock_connect=4, sock_read=4)
+TIMEOUT = 180
+HEAD_TIMEOUT = 4
 
 
 async def GET_request(url, cookies=None, proxy_list=None) -> str:
     try:
-        async with aiohttp.ClientSession(
-            headers=HEAD,
-            cookie_jar=aiohttp.CookieJar(unsafe=True),
-            cookies=cookies,
-            timeout=TIMEOUT,
-            connector=ChainProxyConnector.from_urls(proxy_list) if proxy_list else None,
-        ) as sess:
+        proxy = proxy_list[0] if proxy_list else None
+        async with AsyncSession(impersonate=IMPERSONATE) as session:
             logger.info("GET %s" % url)
-            async with sess.get(url) as resp:
-                return await resp.text()
-    except asyncio.exceptions.CancelledError:
+            resp = await session.get(
+                url, cookies=cookies or {}, proxy=proxy, timeout=TIMEOUT
+            )
+            return resp.text
+    except asyncio.CancelledError:
         raise LoopError("Asyncio loop has been closed before request could finish.")
 
 
 async def GET_request_cookies(
     url, cookies=None, proxy_list=None
-) -> Tuple[str, AbstractCookieJar]:
+) -> Tuple[str, Dict[str, str]]:
     try:
-        async with aiohttp.ClientSession(
-            headers=HEAD,
-            cookie_jar=aiohttp.CookieJar(unsafe=True),
-            cookies=cookies,
-            timeout=TIMEOUT,
-            connector=ChainProxyConnector.from_urls(proxy_list) if proxy_list else None,
-        ) as sess:
+        proxy = proxy_list[0] if proxy_list else None
+        async with AsyncSession(impersonate=IMPERSONATE) as session:
             logger.info("GET %s" % url)
-            async with sess.get(url) as resp:
-                return (await resp.text(), sess.cookie_jar)
-    except asyncio.exceptions.CancelledError:
+            resp = await session.get(
+                url, cookies=cookies or {}, proxy=proxy, timeout=TIMEOUT
+            )
+            return (resp.text, dict(resp.cookies))
+    except asyncio.CancelledError:
         raise LoopError("Asyncio loop has been closed before request could finish.")
 
 
-async def POST_request(url, data, proxy_list=None):
+async def POST_request(url, data, proxy_list=None) -> Tuple[str, Dict[str, str]]:
     try:
-        async with aiohttp.ClientSession(
-            headers=HEAD,
-            timeout=TIMEOUT,
-            cookie_jar=aiohttp.CookieJar(unsafe=True),
-            connector=ChainProxyConnector.from_urls(proxy_list) if proxy_list else None,
-        ) as sess:
+        proxy = proxy_list[0] if proxy_list else None
+        async with AsyncSession(impersonate=IMPERSONATE) as session:
             logger.info("POST %s" % url)
-            async with sess.post(url, data=data) as resp:
-                return (await resp.text(), sess.cookie_jar)
-    except asyncio.exceptions.CancelledError:
+            resp = await session.post(
+                url, data=data, proxy=proxy, timeout=TIMEOUT
+            )
+            return (resp.text, dict(resp.cookies))
+    except asyncio.CancelledError:
         raise LoopError("Asyncio loop has been closed before request could finish.")
 
 
 async def HEAD_request(url, proxy_list=None):
     try:
-        async with aiohttp.ClientSession(
-            headers=HEAD,
-            timeout=HEAD_TIMEOUT,
-            connector=ChainProxyConnector.from_urls(proxy_list) if proxy_list else None,
-        ) as sess:
+        proxy = proxy_list[0] if proxy_list else None
+        async with AsyncSession(impersonate=IMPERSONATE) as session:
             logger.info("Checking connectivity of %s..." % url)
-            async with sess.head(url) as resp:
-                return resp.status
-    except asyncio.exceptions.CancelledError:
-        raise LoopError("Asyncio loop has been closed before request could finish.")
-    except asyncio.exceptions.TimeoutError:
+            resp = await session.head(url, proxy=proxy, timeout=HEAD_TIMEOUT)
+            return resp.status_code
+    except Exception:
         return 0
