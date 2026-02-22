@@ -44,6 +44,8 @@ class SearchPaginator:
         soup = bsoup(page, features="lxml")
         box = soup.find("div", {"id": "searchResultBox"})
         if not box or type(box) is not Tag:
+            with open("/tmp/zlibrary_debug.html", "w", encoding="utf-8") as f:
+                f.write(page)
             raise ParseError("Could not parse book list.")
 
         check_notfound = soup.find("div", {"class": "notFound"})
